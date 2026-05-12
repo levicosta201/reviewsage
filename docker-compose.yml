@@ -1,0 +1,77 @@
+services:
+  # ───────────────────────────────────────
+  # Aplicação Next.js (produção)
+  # ───────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: reviewsage:latest
+    container_name: reviewsage-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-reviewsage}:${POSTGRES_PASSWORD:-reviewsage}@postgres:5432/${POSTGRES_DB:-reviewsage}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - reviewsage
+
+  # ───────────────────────────────────────
+  # PostgreSQL 16 com pgvector
+  # ───────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: reviewsage-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-reviewsage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reviewsage}
+      POSTGRES_DB: ${POSTGRES_DB:-reviewsage}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reviewsage} -d ${POSTGRES_DB:-reviewsage}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - reviewsage
+
+  # ───────────────────────────────────────
+  # Redis (BullMQ queue)
+  # ───────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: reviewsage-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - reviewsage
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  reviewsage:
+    driver: bridge

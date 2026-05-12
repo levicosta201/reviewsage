@@ -1,0 +1,42 @@
+# Sobe apenas postgres + redis para desenvolvimento local.
+# Use com: make dev
+# O Next.js roda localmente com hot-reload (npm run dev).
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: reviewsage-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-reviewsage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reviewsage}
+      POSTGRES_DB: ${POSTGRES_DB:-reviewsage}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reviewsage}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: reviewsage-redis-dev
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
