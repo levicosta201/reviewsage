@@ -1,0 +1,210 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          OrganizationUser[]
+  projects       Project[]
+  apiKeys        ApiKey[]
+  reviewSessions ReviewSession[]
+}
+
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  email         String     @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          GlobalRole @default(USER)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  organizations OrganizationUser[]
+}
+
+model OrganizationUser {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgRole  @default(MEMBER)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Project {
+  id             String     @id @default(cuid())
+  organizationId String
+  name           String
+  githubOwner    String
+  githubRepo     String
+  githubToken    String?
+  isActive       Boolean    @default(true)
+  lastSyncAt     DateTime?
+  syncStatus     SyncStatus @default(IDLE)
+  commentCount   Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  embeddings     PRCommentEmbedding[]
+  reviewSessions ReviewSession[]
+
+  @@unique([organizationId, githubOwner, githubRepo])
+}
+
+model PRCommentEmbedding {
+  id          String                        @id @default(cuid())
+  projectId   String
+  prNumber    Int
+  prTitle     String?
+  commentBody String                        @db.Text
+  commentType String
+  filePath    String?
+  lineNumber  Int?
+  author      String?
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime                      @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model ReviewSession {
+  id             String       @id @default(cuid())
+  organizationId String
+  projectId      String
+  prUrl          String
+  prNumber       Int
+  prTitle        String?
+  prAuthor       String?
+  status         ReviewStatus @default(PENDING)
+  tokensUsed     Int?
+  commentsPosted Int?
+  error          String?      @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  comments     ReviewComment[]
+}
+
+model ReviewComment {
+  id              String    @id @default(cuid())
+  reviewSessionId String
+  filePath        String?
+  lineNumber      Int?
+  body            String    @db.Text
+  severity        Severity  @default(SUGGESTION)
+  postedAt        DateTime?
+  githubCommentId Int?
+
+  reviewSession ReviewSession @relation(fields: [reviewSessionId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  keyHash        String    @unique
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum GlobalRole {
+  USER
+  ADMIN
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum SyncStatus {
+  IDLE
+  SYNCING
+  COMPLETED
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum Severity {
+  CRITICAL
+  WARNING
+  SUGGESTION
+  INFO
+}

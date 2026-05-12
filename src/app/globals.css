@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0d0d14;
+  --foreground: #f0f0f5;
+  --card: #13131f;
+  --card-foreground: #f0f0f5;
+  --border: #1e1e30;
+  --input: #1e1e30;
+  --primary: #7c3aed;
+  --primary-foreground: #ffffff;
+  --secondary: #1a1a28;
+  --secondary-foreground: #a0a0b8;
+  --muted: #1a1a28;
+  --muted-foreground: #6b6b8a;
+  --accent: #1e1e30;
+  --accent-foreground: #f0f0f5;
+  --destructive: #ef4444;
+  --ring: #7c3aed;
+  --radius: 0.625rem;
 }
 
 @theme inline {
@@ -12,15 +27,81 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--background); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2e2e48; }
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #a78bfa, #818cf8, #38bdf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effects */
+.glow-violet {
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.15);
+}
+
+.glow-violet-strong {
+  box-shadow: 0 0 60px rgba(124, 58, 237, 0.3), 0 0 120px rgba(124, 58, 237, 0.1);
+}
+
+/* Animated gradient background */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease infinite;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(19, 19, 31, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Code block */
+.code-block {
+  background: #0a0a12;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-geist-mono), monospace;
+}
+
+/* Focus ring */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

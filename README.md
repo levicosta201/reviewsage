@@ -1,36 +1,133 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ReviewSage
 
-## Getting Started
+> Code review com IA que aprende com o histórico do seu time. Economize 90% de tokens.
 
-First, run the development server:
+[![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](https://opensource.org/licenses/MIT)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://typescriptlang.org)
+
+## O que é o ReviewSage?
+
+ReviewSage é uma plataforma SaaS open-source que:
+
+1. **Lê o histórico de comentários de PRs** do seu repositório GitHub
+2. **Cria um banco vetorial** com embeddings desses comentários
+3. **Quando você solicita**, analisa um PR novo e gera comentários contextuais baseados nos padrões históricos
+4. **Posta os comentários** diretamente no PR do GitHub
+
+### Por que não review automático por push?
+
+Ferramentas que rodam a cada push gastam tokens continuamente — mesmo em commits de WIP e fixups. Com o ReviewSage:
+
+- O banco vetorial é construído **uma única vez** e atualizado incrementalmente
+- O review **só roda quando você pede** — não em cada push
+- Resultado: **90-94% de economia de tokens** com qualidade superior
+
+## Stack
+
+- **Framework**: Next.js 16 (App Router) + TypeScript
+- **Database**: PostgreSQL + pgvector (embeddings vetoriais)
+- **ORM**: Prisma
+- **Auth**: NextAuth.js v5 (GitHub OAuth + credenciais)
+- **IA**: Anthropic Claude (review generation)
+- **Queue**: BullMQ + Redis (sync de histórico)
+- **UI**: Tailwind CSS + Radix UI
+
+## Setup local
+
+### Pré-requisitos
+
+- Node.js 20+
+- PostgreSQL com extensão `pgvector`
+- Redis
+- GitHub OAuth App
+- Anthropic API key
+
+### Instalação
 
 ```bash
+git clone https://github.com/reviewsage/reviewsage
+cd reviewsage
+npm install
+
+cp .env.example .env
+# Preencha as variáveis no .env
+
+npm run db:push
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Variáveis de ambiente
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/reviewsage"
+NEXTAUTH_SECRET="gere com: openssl rand -base64 32"
+NEXTAUTH_URL="http://localhost:3000"
+GITHUB_CLIENT_ID=""
+GITHUB_CLIENT_SECRET=""
+ANTHROPIC_API_KEY=""
+REDIS_URL="redis://localhost:6379"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### PostgreSQL com pgvector
 
-## Learn More
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Estrutura do projeto
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+├── app/
+│   ├── page.tsx                    # Landing page
+│   ├── (auth)/login|register/      # Autenticação
+│   ├── (dashboard)/                # Painel do usuário
+│   │   ├── dashboard/              # Visão geral
+│   │   ├── projects/               # Gerenciar projetos
+│   │   ├── review/                 # Revisar um PR
+│   │   ├── history/                # Histórico de reviews
+│   │   └── agent-skill/            # Exportar skill para agentes
+│   ├── (admin)/admin/              # Painel super admin
+│   └── api/                        # API Routes
+│       ├── auth/                   # NextAuth + registro
+│       ├── projects/               # CRUD de projetos
+│       ├── reviews/                # Criar review
+│       └── sync/[projectId]/       # Sincronizar histórico
+├── lib/
+│   ├── ai.ts                       # Claude + embeddings
+│   ├── github.ts                   # Octokit wrapper
+│   ├── db.ts                       # Prisma client
+│   └── auth.ts                     # NextAuth config
+└── components/ui/                  # Componentes UI base
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Agent Skill
 
-## Deploy on Vercel
+O ReviewSage pode ser usado como uma skill em agentes de IA:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```json
+POST /api/reviews
+Authorization: Bearer sua-api-key
+{
+  "prUrl": "https://github.com/owner/repo/pull/123"
+}
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Ideal para usar com Claude Code, Cursor, ou qualquer agente que suporte MCP.
+
+## Multi-tenant
+
+Cada empresa tem seu próprio workspace isolado com:
+- Projetos e histórico separados
+- Controle de acesso por role (Owner, Admin, Member)
+- Métricas de uso individuais
+- Planos Free / Pro / Enterprise
+
+## Contribuindo
+
+PRs são bem-vindos! Veja [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Licença
+
+MIT © ReviewSage Contributors

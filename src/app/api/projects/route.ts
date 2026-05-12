@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const orgUser = await db.organizationUser.findFirst({
+    where: { userId: session.user.id },
+  });
+  if (!orgUser) return NextResponse.json({ projects: [] });
+
+  const projects = await db.project.findMany({
+    where: { organizationId: orgUser.organizationId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json({ projects });
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { name, githubOwner, githubRepo, githubToken } = await req.json();
+
+  const orgUser = await db.organizationUser.findFirst({
+    where: { userId: session.user.id },
+  });
+  if (!orgUser) return NextResponse.json({ error: "No organization" }, { status: 400 });
+
+  const project = await db.project.create({
+    data: {
+      name,
+      githubOwner,
+      githubRepo,
+      githubToken: githubToken || null,
+      organizationId: orgUser.organizationId,
+    },
+  });
+
+  return NextResponse.json(project, { status: 201 });
+}
