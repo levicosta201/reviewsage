@@ -6,7 +6,7 @@ import {
   Plus, Github, RefreshCw, Loader2, FolderGit2,
   CheckCircle2, AlertCircle, Clock, Key, Bot,
   BookOpen, ChevronDown, ChevronUp, Search, Lock,
-  Globe, Star, ArrowLeft, X, ChevronRight,
+  Globe, Star, ArrowLeft, X, ChevronRight, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +73,7 @@ export default function ProjectsPage() {
   const [syncing, setSyncing]       = useState<string | null>(null);
   const [form, setForm]             = useState(emptyForm);
   const [saving, setSaving]         = useState(false);
+  const [deleting, setDeleting]     = useState<string | null>(null);
   const [showPAT, setShowPAT]       = useState(false);
   const [showPEM, setShowPEM]       = useState(false);
   const [step, setStep]             = useState<Step>("pick-repo");
@@ -174,6 +175,17 @@ export default function ProjectsPage() {
       if (res.ok) { handleClose(); fetchProjects(); }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete(project: Project) {
+    if (!confirm(`Excluir "${project.name}"? Todos os embeddings e histórico de reviews serão apagados permanentemente.`)) return;
+    setDeleting(project.id);
+    try {
+      await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -652,17 +664,30 @@ export default function ProjectsPage() {
                   )}
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2"
-                  onClick={() => handleSync(project.id)}
-                  disabled={syncing === project.id || project.syncStatus === "SYNCING"}
-                  style={{ borderColor: "rgba(255,255,255,0.1)" }}
-                >
-                  {syncing === project.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  Sincronizar histórico
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-2"
+                    onClick={() => handleSync(project.id)}
+                    disabled={syncing === project.id || project.syncStatus === "SYNCING"}
+                    style={{ borderColor: "rgba(255,255,255,0.1)" }}
+                  >
+                    {syncing === project.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Sincronizar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(project)}
+                    disabled={deleting === project.id}
+                    style={{ borderColor: "rgba(255,255,255,0.1)", color: "#f87171" }}
+                  >
+                    {deleting === project.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
               </div>
             );
           })}
