@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { parsePRUrl, fetchPRDiff, postReviewComments, createOctokit } from "@/lib/github";
+import { parsePRUrl, fetchPRDiff, postReviewComments, createOctokitForProject } from "@/lib/github";
 import { generateEmbedding, findSimilarComments, generatePRReview } from "@/lib/ai";
 
 export async function POST(req: NextRequest) {
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const octokit = createOctokit(project.githubToken ?? process.env.GITHUB_TOKEN ?? "");
+    const octokit = createOctokitForProject(project);
 
     // Fetch PR diff
     const prData = await fetchPRDiff(octokit, parsed.owner, parsed.repo, parsed.number);

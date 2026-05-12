@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { createOctokit, fetchPRComments } from "@/lib/github";
+import { createOctokitForProject, fetchPRComments } from "@/lib/github";
 import { generateEmbedding } from "@/lib/ai";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
@@ -18,23 +18,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
   });
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-  // Start sync in background
-  syncProjectHistory(project.id, project.githubOwner, project.githubRepo, project.githubToken).catch(console.error);
+  syncProjectHistory(project).catch(console.error);
 
   await db.project.update({ where: { id: projectId }, data: { syncStatus: "SYNCING" } });
 
   return NextResponse.json({ message: "Sync started" });
 }
 
-async function syncProjectHistory(projectId: string, owner: string, repo: string, token: string | null) {
+async function syncProjectHistory(project: {
+  id: string;
+  githubOwner: string;
+  githubRepo: string;
+  authType: string;
+  githubToken: string | null;
+  githubAppId: string | null;
+  githubAppPrivateKey: string | null;
+  githubInstallationId: string | null;
+}) {
   try {
-    const octokit = createOctokit(token ?? process.env.GITHUB_TOKEN ?? "");
-    const comments = await fetchPRComments(octokit, owner, repo, { maxPages: 5 });
+    const octokit = createOctokitForProject(project);
+    const comments = await fetchPRComments(octokit, project.githubOwner, project.githubRepo, { maxPages: 5 });
 
     let imported = 0;
     for (const comment of comments) {
       const existing = await db.pRCommentEmbedding.findFirst({
-        where: { projectId, prNumber: comment.prNumber, commentBody: comment.body },
+        where: { projectId: project.id, prNumber: comment.prNumber, commentBody: comment.body },
       });
       if (existing) continue;
 
@@ -47,7 +55,7 @@ async function syncProjectHistory(projectId: string, owner: string, repo: string
           "commentType", "filePath", "lineNumber", "author", "embedding", "createdAt"
         )
         VALUES (
-          gen_random_uuid(), ${projectId}, ${comment.prNumber}, ${comment.prTitle ?? null},
+          gen_random_uuid(), ${project.id}, ${comment.prNumber}, ${comment.prTitle ?? null},
           ${comment.body}, ${comment.type}, ${comment.filePath ?? null},
           ${comment.lineNumber ?? null}, ${comment.author}, ${vector}::vector, NOW()
         )
@@ -57,7 +65,7 @@ async function syncProjectHistory(projectId: string, owner: string, repo: string
     }
 
     await db.project.update({
-      where: { id: projectId },
+      where: { id: project.id },
       data: {
         syncStatus: "COMPLETED",
         lastSyncAt: new Date(),
@@ -66,7 +74,7 @@ async function syncProjectHistory(projectId: string, owner: string, repo: string
     });
   } catch (err) {
     await db.project.update({
-      where: { id: projectId },
+      where: { id: project.id },
       data: { syncStatus: "FAILED" },
     });
     throw err;

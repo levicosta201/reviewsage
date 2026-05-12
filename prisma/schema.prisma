@@ -58,7 +58,11 @@ model Project {
   name           String
   githubOwner    String
   githubRepo     String
+  authType       AuthType   @default(PAT)
   githubToken    String?
+  githubAppId    String?
+  githubAppPrivateKey String? @db.Text
+  githubInstallationId String?
   isActive       Boolean    @default(true)
   lastSyncAt     DateTime?
   syncStatus     SyncStatus @default(IDLE)
@@ -169,6 +173,11 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+enum AuthType {
+  PAT
+  GITHUB_APP
 }
 
 enum Plan {

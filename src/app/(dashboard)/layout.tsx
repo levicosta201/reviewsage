@@ -10,15 +10,20 @@ import {
   Settings,
   LogOut,
   Bot,
+  BookOpen,
 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/projects", icon: FolderGit2, label: "Projetos" },
-  { href: "/review", icon: GitPullRequest, label: "Revisar PR" },
-  { href: "/history", icon: History, label: "Histórico" },
-  { href: "/agent-skill", icon: Bot, label: "Agent Skill" },
-  { href: "/settings", icon: Settings, label: "Configurações" },
+  { href: "/dashboard",    icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/projects",     icon: FolderGit2,      label: "Projetos" },
+  { href: "/review",       icon: GitPullRequest,  label: "Revisar PR" },
+  { href: "/history",      icon: History,         label: "Histórico" },
+  { href: "/agent-skill",  icon: Bot,             label: "Agent Skill" },
+  { href: "/settings",     icon: Settings,        label: "Configurações" },
+];
+
+const docItems = [
+  { href: "/docs/github-auth", icon: BookOpen, label: "Auth GitHub" },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -53,6 +58,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
               {item.label}
             </Link>
           ))}
+
+          <div className="pt-3 mt-2" style={{ borderTop: "1px solid var(--border)" }}>
+            <p className="px-3 pb-1.5 text-xs font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)", opacity: 0.5 }}>
+              Documentação
+            </p>
+            {docItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors hover:text-white"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                <item.icon className="h-4 w-4 flex-shrink-0" />
+                {item.label}
+              </Link>
+            ))}
+          </div>
         </nav>
 
         {/* User */}

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, githubOwner, githubRepo, githubToken } = await req.json();
+  const { name, githubOwner, githubRepo, authType, githubToken, githubAppId, githubAppPrivateKey, githubInstallationId } = await req.json();
 
   const orgUser = await db.organizationUser.findFirst({
     where: { userId: session.user.id },
@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
       name,
       githubOwner,
       githubRepo,
-      githubToken: githubToken || null,
+      authType: authType ?? "PAT",
+      githubToken: authType === "GITHUB_APP" ? null : (githubToken || null),
+      githubAppId: authType === "GITHUB_APP" ? (githubAppId || null) : null,
+      githubAppPrivateKey: authType === "GITHUB_APP" ? (githubAppPrivateKey || null) : null,
+      githubInstallationId: authType === "GITHUB_APP" ? (githubInstallationId || null) : null,
       organizationId: orgUser.organizationId,
     },
   });

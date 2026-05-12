@@ -1,7 +1,39 @@
 import { Octokit } from "@octokit/rest";
+import { createAppAuth } from "@octokit/auth-app";
+
+type ProjectAuth = {
+  authType: string;
+  githubToken?: string | null;
+  githubAppId?: string | null;
+  githubAppPrivateKey?: string | null;
+  githubInstallationId?: string | null;
+};
 
 export function createOctokit(token: string) {
   return new Octokit({ auth: token });
+}
+
+export function createOctokitForProject(project: ProjectAuth): Octokit {
+  if (
+    project.authType === "GITHUB_APP" &&
+    project.githubAppId &&
+    project.githubAppPrivateKey &&
+    project.githubInstallationId
+  ) {
+    return new Octokit({
+      authStrategy: createAppAuth,
+      auth: {
+        appId: project.githubAppId,
+        privateKey: project.githubAppPrivateKey,
+        installationId: parseInt(project.githubInstallationId),
+      },
+    });
+  }
+
+  // Fallback: PAT do projeto ou GITHUB_TOKEN do ambiente
+  return new Octokit({
+    auth: project.githubToken ?? process.env.GITHUB_TOKEN ?? "",
+  });
 }
 
 export function parsePRUrl(url: string): { owner: string; repo: string; number: number } | null {
