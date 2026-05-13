@@ -182,6 +182,8 @@ model AISettings {
   provider         AIProvider @default(ANTHROPIC)
   anthropicApiKey  String?    @db.Text
   anthropicModel   String     @default("claude-haiku-4-5-20251001")
+  openaiApiKey     String?    @db.Text
+  openaiModel      String     @default("gpt-4o-mini")
   ollamaBaseUrl    String     @default("http://localhost:11434")
   ollamaModel      String     @default("llama3.2")
   updatedAt        DateTime   @updatedAt
@@ -191,6 +193,7 @@ model AISettings {
 
 enum AIProvider {
   ANTHROPIC
+  OPENAI
   OLLAMA
 }
 

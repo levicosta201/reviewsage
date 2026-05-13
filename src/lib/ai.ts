@@ -1,8 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { Ollama } from "ollama";
 import { db } from "./db";
 
-const REVIEW_COMMENT_SCHEMA = `[{ "filePath": "src/file.ts", "lineNumber": 42, "body": "Comment text", "severity": "WARNING" }]`;
+const DEFAULT_OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+
+// ── Prompts ──────────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are an expert code reviewer. You analyze pull requests and provide constructive, actionable feedback based on historical review patterns from this project.
 
@@ -13,7 +16,7 @@ Your reviews should:
 - Use the severity levels: CRITICAL, WARNING, SUGGESTION, INFO
 
 Return a JSON array of review comments with this structure:
-${REVIEW_COMMENT_SCHEMA}
+[{ "filePath": "src/file.ts", "lineNumber": 42, "body": "Comment text", "severity": "WARNING" }]
 
 Only return the JSON array, no other text.`;
 
@@ -46,7 +49,6 @@ Generate specific, actionable review comments based on the diff and historical p
 
 function parseReviewJson(text: string) {
   try {
-    // extract JSON array even if model wraps it in markdown
     const match = text.match(/\[[\s\S]*\]/);
     const parsed = JSON.parse(match ? match[0] : text);
     return Array.isArray(parsed) ? parsed : [];
@@ -57,9 +59,9 @@ function parseReviewJson(text: string) {
 
 // ── Anthropic ────────────────────────────────────────────────────────────────
 
-function getAnthropicClient(apiKey?: string | null) {
+function makeAnthropicClient(apiKey?: string | null) {
   const key = apiKey || process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("Anthropic API key not configured. Add it in Settings or set ANTHROPIC_API_KEY in .env");
+  if (!key) throw new Error("Chave da API Anthropic não configurada. Adicione em Configurações.");
   return new Anthropic({ apiKey: key });
 }
 
@@ -68,7 +70,7 @@ async function reviewWithAnthropic(
   apiKey: string | null | undefined,
   params: Parameters<typeof buildUserPrompt>[0]
 ) {
-  const client = getAnthropicClient(apiKey);
+  const client = makeAnthropicClient(apiKey);
   const response = await client.messages.create({
     model,
     max_tokens: 4096,
@@ -79,11 +81,54 @@ async function reviewWithAnthropic(
   return content.type === "text" ? parseReviewJson(content.text) : [];
 }
 
-export async function testAnthropicConnection(model: string, apiKey?: string | null): Promise<{ ok: boolean; latency: number; error?: string }> {
+export async function testAnthropicConnection(
+  model: string,
+  apiKey?: string | null
+): Promise<{ ok: boolean; latency: number; error?: string }> {
   const start = Date.now();
   try {
-    const client = getAnthropicClient(apiKey);
-    await client.messages.create({
+    const client = makeAnthropicClient(apiKey);
+    await client.messages.create({ model, max_tokens: 8, messages: [{ role: "user", content: "ping" }] });
+    return { ok: true, latency: Date.now() - start };
+  } catch (e) {
+    return { ok: false, latency: Date.now() - start, error: String(e) };
+  }
+}
+
+// ── OpenAI ───────────────────────────────────────────────────────────────────
+
+function makeOpenAIClient(apiKey?: string | null) {
+  const key = apiKey || process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("Chave da API OpenAI não configurada. Adicione em Configurações.");
+  return new OpenAI({ apiKey: key });
+}
+
+async function reviewWithOpenAI(
+  model: string,
+  apiKey: string | null | undefined,
+  params: Parameters<typeof buildUserPrompt>[0]
+) {
+  const client = makeOpenAIClient(apiKey);
+  const response = await client.chat.completions.create({
+    model,
+    max_tokens: 4096,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user",   content: buildUserPrompt(params) },
+    ],
+  });
+  const text = response.choices[0]?.message?.content ?? "";
+  return parseReviewJson(text);
+}
+
+export async function testOpenAIConnection(
+  model: string,
+  apiKey?: string | null
+): Promise<{ ok: boolean; latency: number; error?: string }> {
+  const start = Date.now();
+  try {
+    const client = makeOpenAIClient(apiKey);
+    await client.chat.completions.create({
       model,
       max_tokens: 8,
       messages: [{ role: "user", content: "ping" }],
@@ -104,16 +149,19 @@ async function reviewWithOllama(
   const ollama = new Ollama({ host: baseUrl });
   const response = await ollama.chat({
     model,
+    stream: false,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: buildUserPrompt(params) },
+      { role: "user",   content: buildUserPrompt(params) },
     ],
-    stream: false,
   });
   return parseReviewJson(response.message.content);
 }
 
-export async function testOllamaConnection(baseUrl: string, model: string): Promise<{ ok: boolean; latency: number; models?: string[]; error?: string }> {
+export async function testOllamaConnection(
+  baseUrl: string,
+  model: string
+): Promise<{ ok: boolean; latency: number; models?: string[]; error?: string }> {
   const start = Date.now();
   try {
     const ollama = new Ollama({ host: baseUrl });
@@ -125,7 +173,7 @@ export async function testOllamaConnection(baseUrl: string, model: string): Prom
         ok: false,
         latency: Date.now() - start,
         models: names,
-        error: `Model "${model}" not found. Pull it with: ollama pull ${model}`,
+        error: `Modelo "${model}" não encontrado. Baixe com: ollama pull ${model}`,
       };
     }
     return { ok: true, latency: Date.now() - start, models: names };
@@ -137,21 +185,20 @@ export async function testOllamaConnection(baseUrl: string, model: string): Prom
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export async function getAISettings(organizationId: string) {
-  const settings = await db.aISettings.findUnique({ where: { organizationId } });
-  return (
-    settings ?? {
-      provider: "ANTHROPIC" as const,
-      anthropicApiKey: null,
-      anthropicModel: "claude-haiku-4-5-20251001",
-      ollamaBaseUrl: "http://localhost:11434",
-      ollamaModel: "llama3.2",
-    }
-  );
+  const s = await db.aISettings.findUnique({ where: { organizationId } });
+  return s ?? {
+    provider:        "ANTHROPIC" as const,
+    anthropicApiKey: null,
+    anthropicModel:  "claude-haiku-4-5-20251001",
+    openaiApiKey:    null,
+    openaiModel:     "gpt-4o-mini",
+    ollamaBaseUrl:   DEFAULT_OLLAMA_URL,
+    ollamaModel:     "llama3.2",
+  };
 }
 
 export async function generateEmbedding(_text: string): Promise<number[]> {
-  // Placeholder — real embeddings require a dedicated embedding model.
-  // For production: use voyage-3 (Anthropic-recommended) or nomic-embed-text (Ollama).
+  // Placeholder — production: use voyage-3 (Anthropic) or text-embedding-3-small (OpenAI)
   return Array.from({ length: 1536 }, () => Math.random() * 2 - 1);
 }
 
@@ -174,11 +221,10 @@ export async function findSimilarComments(
     ORDER BY embedding <=> ${vector}::vector
     LIMIT ${limit}
   `;
-
   return results.map((r) => ({
     commentBody: r.comment_body,
-    filePath: r.file_path,
-    similarity: r.similarity,
+    filePath:    r.file_path,
+    similarity:  r.similarity,
   }));
 }
 
@@ -192,11 +238,9 @@ export async function generatePRReview(
   },
   organizationId: string
 ): Promise<Array<{ filePath: string; lineNumber: number | null; body: string; severity: string }>> {
-  const settings = await getAISettings(organizationId);
+  const s = await getAISettings(organizationId);
 
-  if (settings.provider === "OLLAMA") {
-    return reviewWithOllama(settings.ollamaBaseUrl, settings.ollamaModel, params);
-  }
-
-  return reviewWithAnthropic(settings.anthropicModel, settings.anthropicApiKey, params);
+  if (s.provider === "OPENAI")   return reviewWithOpenAI(s.openaiModel, s.openaiApiKey, params);
+  if (s.provider === "OLLAMA")   return reviewWithOllama(s.ollamaBaseUrl, s.ollamaModel, params);
+  return reviewWithAnthropic(s.anthropicModel, s.anthropicApiKey, params);
 }

@@ -2,7 +2,10 @@
 .PHONY: help setup dev up down build rebuild logs logs-app shell \
         db-push db-migrate db-studio db-reset db-seed \
         infra-up infra-down infra-reset \
+        ollama-pull ollama-list ollama-shell \
         lint typecheck clean nuke
+
+OLLAMA_MODEL ?= llama3.2
 
 # ──────────────────────────────────────────
 # Cores
@@ -103,6 +106,21 @@ db-reset: infra-reset ## Reinicia o banco e reaplicar o schema
 	@sleep 5
 	npm run db:push
 	@echo "$(GREEN)✔ Banco reiniciado$(RESET)"
+
+## ─────────────────────────────────────────────────────────────────────────────
+## OLLAMA
+## ─────────────────────────────────────────────────────────────────────────────
+
+ollama-pull: ## Baixa um modelo no Ollama. Ex: make ollama-pull OLLAMA_MODEL=llama3.2
+	@echo "$(CYAN)→ Baixando modelo $(OLLAMA_MODEL)$(RESET)"
+	docker compose -f docker-compose.dev.yml exec ollama ollama pull $(OLLAMA_MODEL)
+	@echo "$(GREEN)✔ Modelo $(OLLAMA_MODEL) disponível$(RESET)"
+
+ollama-list: ## Lista modelos instalados no Ollama
+	docker compose -f docker-compose.dev.yml exec ollama ollama list
+
+ollama-shell: ## Abre shell no container do Ollama
+	docker compose -f docker-compose.dev.yml exec ollama sh
 
 ## ─────────────────────────────────────────────────────────────────────────────
 ## QUALIDADE

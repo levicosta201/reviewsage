@@ -37,6 +37,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ───────────────────────────────────────
+  # Ollama — LLM local (opcional)
+  # ───────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: reviewsage-ollama-dev
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_dev_data:/root/.ollama
+    # GPU support — uncomment if you have NVIDIA GPU + nvidia-container-toolkit:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
 volumes:
   postgres_dev_data:
   redis_dev_data:
+  ollama_dev_data:

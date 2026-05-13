@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { testAnthropicConnection, testOllamaConnection } from "@/lib/ai";
+import { testAnthropicConnection, testOpenAIConnection, testOllamaConnection } from "@/lib/ai";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -10,21 +10,27 @@ export async function POST(req: NextRequest) {
   const orgUser = await db.organizationUser.findFirst({ where: { userId: session.user.id } });
   const organizationId = orgUser?.organizationId;
 
-  const { provider, anthropicModel, anthropicApiKey, ollamaBaseUrl, ollamaModel } = await req.json();
+  const { provider, anthropicModel, anthropicApiKey, openaiModel, openaiApiKey, ollamaBaseUrl, ollamaModel } =
+    await req.json();
 
   if (provider === "OLLAMA") {
-    const result = await testOllamaConnection(ollamaBaseUrl, ollamaModel);
-    return NextResponse.json(result);
+    return NextResponse.json(await testOllamaConnection(ollamaBaseUrl, ollamaModel));
   }
 
-  // For Anthropic: prefer the key sent in the request body (user is typing a new one),
-  // fall back to the one already saved in the DB.
-  let keyToUse = anthropicApiKey || null;
-  if (!keyToUse && organizationId) {
+  if (provider === "OPENAI") {
+    let key = openaiApiKey || null;
+    if (!key && organizationId) {
+      const saved = await db.aISettings.findUnique({ where: { organizationId } });
+      key = saved?.openaiApiKey ?? null;
+    }
+    return NextResponse.json(await testOpenAIConnection(openaiModel, key));
+  }
+
+  // Anthropic
+  let key = anthropicApiKey || null;
+  if (!key && organizationId) {
     const saved = await db.aISettings.findUnique({ where: { organizationId } });
-    keyToUse = saved?.anthropicApiKey ?? null;
+    key = saved?.anthropicApiKey ?? null;
   }
-
-  const result = await testAnthropicConnection(anthropicModel, keyToUse);
-  return NextResponse.json(result);
+  return NextResponse.json(await testAnthropicConnection(anthropicModel, key));
 }
