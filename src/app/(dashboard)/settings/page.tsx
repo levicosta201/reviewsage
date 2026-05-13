@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Brain, Cpu, CheckCircle2, XCircle, Loader2,
-  Save, Zap, AlertCircle, ChevronDown,
+  Save, Zap, Eye, EyeOff, ChevronDown, KeyRound, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,9 @@ type AIProvider = "ANTHROPIC" | "OLLAMA";
 
 type AISettings = {
   provider: AIProvider;
+  anthropicApiKey: string;          // value being typed (never pre-filled from DB)
+  anthropicApiKeySet: boolean;      // DB already has a key
+  anthropicApiKeyHint: string | null; // e.g. "sk-ant-...ab12"
   anthropicModel: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
@@ -37,6 +40,9 @@ const OLLAMA_POPULAR = [
 
 const defaultSettings: AISettings = {
   provider: "ANTHROPIC",
+  anthropicApiKey: "",
+  anthropicApiKeySet: false,
+  anthropicApiKeyHint: null,
   anthropicModel: "claude-haiku-4-5-20251001",
   ollamaBaseUrl: "http://localhost:11434",
   ollamaModel: "llama3.2",
@@ -45,12 +51,14 @@ const defaultSettings: AISettings = {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AISettings>(defaultSettings);
   const [saved, setSaved]       = useState<AISettings>(defaultSettings);
-  const [saving, setSaving]     = useState(false);
-  const [testing, setTesting]   = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [testing, setTesting]       = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading]       = useState(true);
   const [ollamaModelInput, setOllamaModelInput] = useState("");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [clearKey, setClearKey]     = useState(false);
 
   useEffect(() => {
     fetch("/api/settings/ai")
@@ -58,6 +66,9 @@ export default function SettingsPage() {
       .then((data) => {
         const s: AISettings = {
           provider: data.provider ?? "ANTHROPIC",
+          anthropicApiKey: "",
+          anthropicApiKeySet: data.anthropicApiKeySet ?? false,
+          anthropicApiKeyHint: data.anthropicApiKeyHint ?? null,
           anthropicModel: data.anthropicModel ?? defaultSettings.anthropicModel,
           ollamaBaseUrl: data.ollamaBaseUrl ?? defaultSettings.ollamaBaseUrl,
           ollamaModel: data.ollamaModel ?? defaultSettings.ollamaModel,
@@ -69,18 +80,42 @@ export default function SettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const isDirty = JSON.stringify(settings) !== JSON.stringify(saved);
+  const isDirty =
+    settings.provider !== saved.provider ||
+    settings.anthropicModel !== saved.anthropicModel ||
+    settings.ollamaBaseUrl !== saved.ollamaBaseUrl ||
+    settings.ollamaModel !== saved.ollamaModel ||
+    settings.anthropicApiKey !== "" ||
+    clearKey;
 
   async function handleSave() {
     setSaving(true);
     setTestResult(null);
     try {
+      const body = {
+        provider: settings.provider,
+        anthropicModel: settings.anthropicModel,
+        ollamaBaseUrl: settings.ollamaBaseUrl,
+        ollamaModel: settings.ollamaModel,
+        // Send key only if user typed something new, or empty string to clear
+        anthropicApiKey: clearKey ? "" : settings.anthropicApiKey || undefined,
+      };
       const res = await fetch("/api/settings/ai", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(body),
       });
-      if (res.ok) setSaved({ ...settings });
+      if (res.ok) {
+        const data = await res.json();
+        setSettings((s) => ({
+          ...s,
+          anthropicApiKey: "",
+          anthropicApiKeySet: data.anthropicApiKeySet,
+          anthropicApiKeyHint: data.anthropicApiKeyHint,
+        }));
+        setSaved((s) => ({ ...s, anthropicApiKey: "" }));
+        setClearKey(false);
+      }
     } finally {
       setSaving(false);
     }
@@ -93,7 +128,13 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings/ai/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          provider: settings.provider,
+          anthropicModel: settings.anthropicModel,
+          anthropicApiKey: settings.anthropicApiKey || undefined,
+          ollamaBaseUrl: settings.ollamaBaseUrl,
+          ollamaModel: settings.ollamaModel,
+        }),
       });
       const data = await res.json();
       setTestResult(data);
@@ -174,30 +215,95 @@ export default function SettingsPage() {
 
         {/* Anthropic config */}
         {settings.provider === "ANTHROPIC" && (
-          <div>
-            <label className="block text-sm font-medium mb-2">Modelo</label>
-            <div className="space-y-2">
-              {ANTHROPIC_MODELS.map((m) => (
-                <button
-                  key={m.value}
-                  onClick={() => setSettings((s) => ({ ...s, anthropicModel: m.value }))}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
-                  style={{
-                    background: settings.anthropicModel === m.value ? "rgba(167,139,250,0.08)" : "rgba(255,255,255,0.02)",
-                    border: settings.anthropicModel === m.value ? "1px solid rgba(167,139,250,0.3)" : "1px solid var(--border)",
-                  }}
+          <div className="space-y-5">
+            {/* API Key field */}
+            <div>
+              <label className="block text-sm font-medium mb-1.5 flex items-center gap-2">
+                <KeyRound className="h-3.5 w-3.5" style={{ color: "#a78bfa" }} />
+                Chave da API Anthropic
+              </label>
+
+              {settings.anthropicApiKeySet && !clearKey ? (
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+                  style={{ background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.2)" }}
                 >
-                  <div
-                    className="h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                    style={{ borderColor: settings.anthropicModel === m.value ? "#a78bfa" : "var(--border)" }}
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: "#34d399" }} />
+                  <span className="text-sm font-mono flex-1" style={{ color: "var(--muted-foreground)" }}>
+                    {settings.anthropicApiKeyHint ?? "Chave configurada"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setClearKey(true)}
+                    className="text-xs px-2 py-1 rounded"
+                    style={{ color: "#f87171", background: "rgba(248,113,113,0.1)" }}
                   >
-                    {settings.anthropicModel === m.value && (
-                      <div className="h-2 w-2 rounded-full" style={{ background: "#a78bfa" }} />
-                    )}
+                    Remover
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="relative">
+                    <Input
+                      type={showApiKey ? "text" : "password"}
+                      placeholder={clearKey ? "Nova chave (ou salve vazio para remover)" : "sk-ant-api03-..."}
+                      value={settings.anthropicApiKey}
+                      onChange={(e) => setSettings((s) => ({ ...s, anthropicApiKey: e.target.value }))}
+                      className="pr-20 font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2"
+                    >
+                      {showApiKey
+                        ? <EyeOff className="h-4 w-4" style={{ color: "var(--muted-foreground)" }} />
+                        : <Eye    className="h-4 w-4" style={{ color: "var(--muted-foreground)" }} />}
+                    </button>
                   </div>
-                  <span className="text-sm font-mono">{m.label}</span>
-                </button>
-              ))}
+                  {clearKey && (
+                    <button
+                      type="button"
+                      onClick={() => setClearKey(false)}
+                      className="text-xs mt-1"
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
+                      ← Cancelar remoção
+                    </button>
+                  )}
+                  <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>
+                    Gere em <strong>console.anthropic.com</strong> → API Keys.
+                    Armazenada no banco de dados da sua organização.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Modelo</label>
+              <div className="space-y-2">
+                {ANTHROPIC_MODELS.map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setSettings((s) => ({ ...s, anthropicModel: m.value }))}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
+                    style={{
+                      background: settings.anthropicModel === m.value ? "rgba(167,139,250,0.08)" : "rgba(255,255,255,0.02)",
+                      border: settings.anthropicModel === m.value ? "1px solid rgba(167,139,250,0.3)" : "1px solid var(--border)",
+                    }}
+                  >
+                    <div
+                      className="h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                      style={{ borderColor: settings.anthropicModel === m.value ? "#a78bfa" : "var(--border)" }}
+                    >
+                      {settings.anthropicModel === m.value && (
+                        <div className="h-2 w-2 rounded-full" style={{ background: "#a78bfa" }} />
+                      )}
+                    </div>
+                    <span className="text-sm font-mono">{m.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -352,16 +458,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* API key warning */}
-      {settings.provider === "ANTHROPIC" && (
-        <div className="mt-4 rounded-xl p-4 flex items-start gap-3" style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)" }}>
-          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "#fbbf24" }} />
-          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            A chave <code>ANTHROPIC_API_KEY</code> é lida do arquivo <code>.env</code> no servidor.
-            Edite o arquivo e reinicie o app para atualizar.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

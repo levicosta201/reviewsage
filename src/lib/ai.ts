@@ -57,11 +57,18 @@ function parseReviewJson(text: string) {
 
 // ── Anthropic ────────────────────────────────────────────────────────────────
 
+function getAnthropicClient(apiKey?: string | null) {
+  const key = apiKey || process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("Anthropic API key not configured. Add it in Settings or set ANTHROPIC_API_KEY in .env");
+  return new Anthropic({ apiKey: key });
+}
+
 async function reviewWithAnthropic(
   model: string,
+  apiKey: string | null | undefined,
   params: Parameters<typeof buildUserPrompt>[0]
 ) {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = getAnthropicClient(apiKey);
   const response = await client.messages.create({
     model,
     max_tokens: 4096,
@@ -72,10 +79,10 @@ async function reviewWithAnthropic(
   return content.type === "text" ? parseReviewJson(content.text) : [];
 }
 
-export async function testAnthropicConnection(model: string): Promise<{ ok: boolean; latency: number; error?: string }> {
+export async function testAnthropicConnection(model: string, apiKey?: string | null): Promise<{ ok: boolean; latency: number; error?: string }> {
   const start = Date.now();
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = getAnthropicClient(apiKey);
     await client.messages.create({
       model,
       max_tokens: 8,
@@ -134,6 +141,7 @@ export async function getAISettings(organizationId: string) {
   return (
     settings ?? {
       provider: "ANTHROPIC" as const,
+      anthropicApiKey: null,
       anthropicModel: "claude-haiku-4-5-20251001",
       ollamaBaseUrl: "http://localhost:11434",
       ollamaModel: "llama3.2",
@@ -190,5 +198,5 @@ export async function generatePRReview(
     return reviewWithOllama(settings.ollamaBaseUrl, settings.ollamaModel, params);
   }
 
-  return reviewWithAnthropic(settings.anthropicModel, params);
+  return reviewWithAnthropic(settings.anthropicModel, settings.anthropicApiKey, params);
 }
