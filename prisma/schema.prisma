@@ -21,6 +21,7 @@ model Organization {
   projects       Project[]
   apiKeys        ApiKey[]
   reviewSessions ReviewSession[]
+  aiSettings     AISettings?
 }
 
 model User {
@@ -173,6 +174,23 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model AISettings {
+  id             String     @id @default(cuid())
+  organizationId String     @unique
+  provider       AIProvider @default(ANTHROPIC)
+  anthropicModel String     @default("claude-haiku-4-5-20251001")
+  ollamaBaseUrl  String     @default("http://localhost:11434")
+  ollamaModel    String     @default("llama3.2")
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+enum AIProvider {
+  ANTHROPIC
+  OLLAMA
 }
 
 enum AuthType {

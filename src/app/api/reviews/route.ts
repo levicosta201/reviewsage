@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       diff: prData.diff,
       similarComments,
       projectContext: project.name,
-    });
+    }, orgUser.organizationId);
 
     // Estimate tokens (rough: input chars / 4 + output chars / 4)
     const tokensUsed = Math.round((prData.diff.length + prData.description.length) / 4 + reviewComments.length * 100);
