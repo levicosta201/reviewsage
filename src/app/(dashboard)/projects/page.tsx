@@ -8,6 +8,7 @@ import {
   BookOpen, ChevronDown, ChevronUp, Search, Lock,
   Globe, Star, ArrowLeft, X, ChevronRight, Trash2,
 } from "lucide-react";
+import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -179,11 +180,36 @@ export default function ProjectsPage() {
   }
 
   async function handleDelete(project: Project) {
-    if (!confirm(`Excluir "${project.name}"? Todos os embeddings e histórico de reviews serão apagados permanentemente.`)) return;
+    const result = await Swal.fire({
+      title: "Excluir projeto?",
+      html: `O projeto <strong>${project.name}</strong> e todos os embeddings e histórico de reviews serão apagados permanentemente.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sim, excluir",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "transparent",
+      background: "#13131f",
+      color: "#e2e8f0",
+      customClass: {
+        popup: "swal-dark-popup",
+        cancelButton: "swal-cancel-btn",
+      },
+    });
+    if (!result.isConfirmed) return;
     setDeleting(project.id);
     try {
       await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
       setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      Swal.fire({
+        title: "Excluído!",
+        text: `"${project.name}" foi removido com sucesso.`,
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+        background: "#13131f",
+        color: "#e2e8f0",
+      });
     } finally {
       setDeleting(null);
     }
